@@ -9,7 +9,7 @@ export async function POST(req: Request) {
 
   if (text.includes("price") || text.includes("cost")) {
     reply =
-      "Mike’s current rate is $200/hour with a $200 deposit. I can give a more specific estimate once I know the placement, size, style, and reference.";
+      "Vals's current rate is $200/hour with a $200 deposit. I can give a more specific estimate once I know the placement, size, style, and reference.";
   } else if (text.includes("book") || text.includes("appointment")) {
     reply =
       "Absolutely. Once I have the tattoo details, I can check available appointment times and reserve a slot.";

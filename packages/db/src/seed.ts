@@ -4,21 +4,21 @@ import { organizations, users, artists, services, businessRules } from "./schema
 
 async function main() {
   const [org] = await db.insert(organizations).values({
-    name: "Demo Tattoo Studio",
+    name: "Embellished Studios",
     slug: "demo-tattoo"
   }).returning();
 
   const [user] = await db.insert(users).values({
     organizationId: org.id,
     email: "artist@example.com",
-    name: "Mike Smith",
+    name: "Val Glenn",
     role: "OWNER"
   }).returning();
 
   const [artist] = await db.insert(artists).values({
     organizationId: org.id,
     userId: user.id,
-    displayName: "Mike Smith",
+    displayName: "Val Glenn",
     hourlyRateCents: 20000,
     minimumPriceCents: 15000,
     aiMode: "ASSISTED"
@@ -39,7 +39,7 @@ async function main() {
     { organizationId: org.id, artistId: artist.id, category: "SERVICES", rule: "Artist does not tattoo faces, hands, or necks." }
   ]);
 
-  console.log("Seeded demo tattoo studio:", org.slug);
+  console.log("Seeded Embellished Studios:", org.slug);
   process.exit(0);
 }
 
