@@ -25,6 +25,9 @@
       ],
       "@db/*": [
         "./packages/db/src/*"
+      ],
+      "@booking/*": [
+        "./packages/booking/src/*"
       ]
     },
     "allowJs": true,

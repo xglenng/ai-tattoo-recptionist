@@ -61,6 +61,19 @@ export const services = pgTable("services", {
   active: boolean("active").default(true).notNull()
 });
 
+
+export const availabilityRules = pgTable("availability_rules", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  artistId: uuid("artist_id").references(() => artists.id).notNull(),
+  dayOfWeek: integer("day_of_week").notNull(),
+  startMinute: integer("start_minute").notNull(),
+  endMinute: integer("end_minute").notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
 export const businessRules = pgTable("business_rules", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
@@ -83,6 +96,7 @@ export const appointments = pgTable("appointments", {
   priceCents: integer("price_cents"),
   depositCents: integer("deposit_cents"),
   depositStatus: text("deposit_status").default("PENDING").notNull(),
+  holdExpiresAt: timestamp("hold_expires_at"),
   calendarEventId: text("calendar_event_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

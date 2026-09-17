@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "AI Tattoo Receptionist",
+  title: "INKFLOW · AI Tattoo Receptionist",
   description: "AI booking assistant for tattoo artists"
 };
 
