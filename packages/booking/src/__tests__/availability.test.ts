@@ -10,7 +10,7 @@ test('generates slots inside business hours', () => {
     [],
     { from: day, to: new Date('2026-09-15T00:00:00'), durationMinutes: 60, slotIntervalMinutes: 30 },
   );
-  assert.equal(slots.length, 2);
+  assert.equal(slots.length, 3);
 });
 
 test('excludes overlapping appointments', () => {

@@ -1,6 +1,6 @@
 import { db } from './index';
 import { eq } from 'drizzle-orm';
-import { organizations, users, artists, clients, services, businessRules, availabilityRules, appointments, conversations, messages } from './schema';
+import { organizations, users, artists, clients, services, businessRules, availabilityRules, appointments, conversations, messages, waiverTemplates } from './schema';
 
 async function seed() {
   const [org] = await db.insert(organizations).values({ name: 'Demo Tattoo Studio', slug: 'demo-tattoo-studio', timezone: 'America/Denver' }).returning();
@@ -41,13 +41,21 @@ async function seed() {
     { conversationId: seededConversations[2].id, senderType: 'ARTIST', role: 'assistant', content: 'Thanks! Your appointment is confirmed.', createdAt: new Date('2026-09-16T17:40:00.000Z') },
   ]);
 
+  await db.insert(waiverTemplates).values({
+    organizationId: org.id,
+    name: 'General Tattoo Consent',
+    version: 1,
+    body: 'I confirm that I am voluntarily receiving a tattoo, have disclosed relevant medical information to the artist, and agree to follow the artist\'s aftercare instructions.',
+    active: true,
+  });
+
   await db.insert(businessRules).values([
     { organizationId: org.id, artistId: artist.id, category: 'DEPOSIT', rule: 'Deposits are $200.', priority: 10 },
     { organizationId: org.id, artistId: artist.id, category: 'BOOKING', rule: 'Require 48 hours notice for booking.', priority: 20 },
     { organizationId: org.id, artistId: artist.id, category: 'RESTRICTION', rule: 'No face, hands, or neck tattoos.', priority: 30 }
   ]);
 
-  console.log({ organizationId: org.id, artistId: artist.id, clientId: client.id });
+  console.log({ organizationId: org.id, userId: user.id, artistId: artist.id, clientId: client.id });
   process.exit(0);
 }
 

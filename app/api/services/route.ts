@@ -1,3 +1,4 @@
+import { protectedRoute } from '@/packages/auth/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { eq, and } from 'drizzle-orm';
 import { db } from '@db/index';
@@ -16,7 +17,7 @@ const createServiceSchema = z.object({
   requiresArtistApproval: z.boolean().optional(),
 });
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   const organizationId = request.nextUrl.searchParams.get('organizationId');
   const artistId = request.nextUrl.searchParams.get('artistId');
   if (!organizationId || !artistId) return NextResponse.json({ error: 'organizationId and artistId are required' }, { status: 400 });
@@ -25,9 +26,12 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ services: rows });
 }
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   const parsed = createServiceSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const [service] = await db.insert(services).values(parsed.data).returning();
   return NextResponse.json({ service }, { status: 201 });
 }
+
+export const GET = protectedRoute(handleGET, false);
+export const POST = protectedRoute(handlePOST, false);

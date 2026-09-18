@@ -1,74 +1,172 @@
-# AI Tattoo Receptionist MVP
+# Current release: Sprint 6.7
 
-Sprint 2 adds the first real booking engine on top of Sprint 1:
+See [SPRINT-6.7.md](SPRINT-6.7.md) for existing-business-number porting and safe temporary-number migration. Live Twilio A2P registration remains documented in [SPRINT-6.6.md](SPRINT-6.6.md).
 
-- Artist weekly availability rules
-- Services with duration/pricing metadata
-- Availability API that excludes booked time
-- Temporary booking holds
-- Booking confirmation state transition
-- Appointment query API
-- Tenant/artist scoping on every booking query
-- Pure booking/availability logic that can be unit tested independently
+Historical sprint notes below describe earlier behavior and are superseded by this release.
+
+# AI Tattoo Receptionist — Sprint 3
+
+Sprint 3 turns the booking prototype into a real integration-ready booking flow.
+
+## Added
+
+- PostgreSQL tables for calendar connections, Stripe payments, waiver templates and signed waiver submissions.
+- Google Calendar OAuth connect/callback and calendar event read/create adapters.
+- Availability checks now include connected Google Calendar events.
+- Stripe Checkout deposit endpoint.
+- Stripe webhook verification and appointment confirmation from successful Checkout sessions.
+- Appointment lookup/cancel and calendar sync endpoints.
+- Versioned waiver templates and immutable signed waiver records with SHA-256 document hashes.
+- Booking holds ignore expired tentative/AI holds.
 
 ## Run
 
 ```bash
 cp .env.example .env
-docker compose up -d postgres
 npm install
+docker compose up -d postgres
 npm run db:push
 npm run db:seed
+npm run typecheck
+npm test
 npm run dev
 ```
 
-Open http://localhost:3000.
+## Stripe local testing
 
-## Sprint 2 API examples
+Set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in `.env`. Use Stripe CLI to forward events to:
 
-Availability:
+`POST /api/payments/webhook`
 
-```text
-GET /api/availability?organizationId=<ORG>&artistId=<ARTIST>&from=2026-09-17T00:00:00.000Z&to=2026-09-18T00:00:00.000Z&durationMinutes=120
+The browser/client must never mark an appointment paid. The webhook is the source of truth.
+
+## Google Calendar setup
+
+Create a Google OAuth web application and configure:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI`
+
+The connect URL is:
+
+`/api/integrations/google/connect?organizationId=<ORG_ID>&artistId=<ARTIST_ID>`
+
+## Important production TODOs
+
+This sprint stores OAuth access/refresh tokens in the database as a development placeholder. Before production, encrypt tokens at rest, validate OAuth state server-side, implement refresh-token rotation/expiry handling, and add authenticated authorization checks to every organization/artist endpoint.
+
+The MVP intentionally uses a simple Stripe Checkout flow and Google Calendar adapter. Authentication, Twilio SMS, AI tool calling, and full payment/refund reconciliation are later sprints.
+
+## Sprint 4 — AI receptionist
+
+The AI chat endpoint now supports real tool calling against PostgreSQL. Set `AI_PROVIDER=mock` to use the deterministic local demo. To use the live agent, set `OPENAI_API_KEY` and optionally `OPENAI_MODEL`.
+
+The live agent can read client/service context, check real availability, create a temporary booking hold, create a Stripe deposit link, provide a waiver URL, and escalate a conversation. The backend remains the source of truth for booking/payment state.
+
+Example live request:
+```bash
+curl -X POST http://localhost:3000/api/ai/chat \
+  -H 'content-type: application/json' \
+  -d '{"organizationId":"YOUR_ORG_ID","artistId":"YOUR_ARTIST_ID","clientId":"YOUR_CLIENT_ID","message":"Do you have anything next Friday afternoon for a 2 hour tattoo?"}'
 ```
 
-Create a booking hold:
+Do not commit `.env` or API keys.
 
-```text
-POST /api/booking/hold
-Content-Type: application/json
+## Sprint 5 — SMS Receptionist (Twilio)
 
-{
-  "organizationId": "...",
-  "artistId": "...",
-  "clientId": "...",
-  "serviceId": "...",
-  "startsAt": "2026-09-17T18:00:00.000Z",
-  "depositCents": 20000,
-  "priceCents": 40000
-}
+Sprint 5 adds the first real messaging channel:
+- Twilio inbound SMS webhook at `/api/twilio/inbound`
+- Twilio outbound SMS adapter
+- STOP/START opt-out handling
+- Phone-number-to-artist mapping via `phone_numbers`
+- SMS conversations persisted in the existing conversation/message model
+- Inbound SMS can hand off to the existing AI receptionist and send its reply back by SMS
+- Basic automation job table and runner at `/api/automations/run`
+- Local outbound SMS test page at `/sms-test`
+- AI now receives recent conversation history instead of only the latest message
+
+### Sprint 5 environment
+Copy these into `.env`:
+```env
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_PHONE_NUMBER=
+TWILIO_WEBHOOK_URL=http://localhost:3000/api/twilio/inbound
+TWILIO_VALIDATE_SIGNATURE=false
+TWILIO_DEFAULT_ORGANIZATION_ID=
+TWILIO_DEFAULT_ARTIST_ID=
+AUTOMATION_CRON_SECRET=
 ```
 
-Confirm after a verified payment event:
+For local testing, `TWILIO_VALIDATE_SIGNATURE=false` avoids needing a public webhook URL. Before production, set it to `true` and configure `TWILIO_WEBHOOK_URL` to the exact public Twilio webhook URL.
 
-```text
-POST /api/booking/confirm
-Content-Type: application/json
+Run `npm run db:push` after pulling this sprint so the new tables are created.
 
-{
-  "organizationId": "...",
-  "appointmentId": "...",
-  "depositStatus": "PAID"
-}
-```
+## Sprint 6: Compliance Setup
 
-## Important architecture rule
+New `/compliance` setup screen and compliance profile APIs collect business details, SMS preference, legal-page acceptance, generated legal-page drafts, and a status field for Twilio onboarding.
 
-The AI must never decide that a slot is available or that payment succeeded. It asks typed application tools. The booking engine and payment webhook remain authoritative.
+Run `npm run db:push` after pulling this sprint. The Twilio Customer Profile, Brand, and A2P Campaign SID fields are included in the schema, but the live Twilio Trust Hub registration calls are intentionally staged behind this module until business verification, legal-page hosting, and per-tenant credentials are finalized.
 
-## Next sprint
+## Sprint 6.1 — Tenant-specific legal pages
 
-Sprint 3 should wire Google Calendar, Stripe Checkout/webhooks, and proper transactional booking holds/locking before exposing this to beta artists.
+The compliance module now supports organization-specific legal documents instead of placeholder pages.
 
-## Sprint 2 dashboard data
-The dashboard reads live PostgreSQL data through `GET /api/dashboard`. The frontend no longer contains appointment/client/conversation demo arrays. `npm run db:seed` creates demo records in PostgreSQL so the dashboard has data to display. The current MVP selects the first seeded artist; authentication/tenant context will replace that in a later sprint.
+Flow:
+1. Open `/compliance`.
+2. Save the organization's business information.
+3. Generate Privacy Policy and Terms drafts.
+4. Review/edit both drafts in the dashboard.
+5. Accept and publish the reviewed versions.
+6. The app creates public URLs using the organization slug:
+   - `/legal/{organization-slug}/privacy`
+   - `/legal/{organization-slug}/terms`
+7. The compliance profile stores those URLs for the next Twilio registration step.
+
+Published legal documents are versioned and are not edited in place. Generating a new set creates a new draft version.
+
+Before testing this sprint against PostgreSQL, run `npm run db:push` to create the new `legal_documents` table.
+
+For production, set `NEXT_PUBLIC_APP_URL` to the canonical public app URL so generated compliance URLs always use the production hostname.
+
+Legal text is a starting template, not legal advice. Each business should review its published legal documents for its actual practices and applicable law.
+
+
+## Sprint 6.1 audit notes
+- Tenant-specific public legal URLs are served at `/legal/[slug]/privacy` and `/legal/[slug]/terms`.
+- Published legal documents are retained as versioned records; generating a new set archives prior drafts.
+- Compliance APIs validate organization ownership at the database-record level. Production authentication/authorization must still be wired to the logged-in organization before exposing these admin APIs.
+- `@db` and `@db/*` TypeScript aliases are both defined.
+
+
+## Sprint 6.2 — Multi-tenant Twilio infrastructure
+
+Each artist can have an isolated Twilio subaccount, Messaging Service, and SMS phone number. The parent Twilio account remains controlled by the SaaS. Twilio subaccounts isolate customer resources and usage.
+
+Flow:
+1. `POST /api/twilio/provision` receives an organization ID, artist ID, and optional US area code.
+2. The app creates or reuses that artist's Twilio subaccount.
+3. The app creates or reuses the artist's Messaging Service.
+4. The app searches for an SMS-capable local number and provisions it.
+5. The number is added to the Messaging Service and mapped to the artist in PostgreSQL.
+6. Inbound SMS resolves the artist from the destination number, then uses that artist's subaccount credentials for signature validation and replies.
+7. Outbound SMS uses the mapped artist subaccount and Messaging Service.
+
+Run `npm run db:push` after pulling this sprint. Generate `TWILIO_ENCRYPTION_KEY` as a base64-encoded 32-byte value and set `TWILIO_WEBHOOK_BASE_URL` to a public HTTPS URL. The Twilio auth token returned when a subaccount is created is encrypted before storage.
+
+Open `/twilio` for the development provisioning/status screen. Production authentication and authorization are still required before exposing these admin endpoints to customers.
+
+Twilio provisioning uses the parent account to create subaccounts, then operates on each subaccount's resources. See the current Twilio subaccount and phone-number API documentation for account limits, regional requirements, and messaging compliance requirements.
+
+## Sprint 6.3 — A2P registration intake and lifecycle
+
+Sprint 6.3 connects published legal pages to an organization-specific A2P registration workflow.
+
+- `/compliance/registration` collects business identity, campaign use case, opt-in flow, sample messages, HELP/STOP responses, and campaign content declarations.
+- Business registration numbers are encrypted at rest and never returned by the API; only the last four digits and a configured flag are exposed.
+- `GET/PUT/POST /api/compliance/registration` loads, saves, validates, and submits the registration.
+- `/api/compliance/registration/status` supports status synchronization and mock approval/rejection testing.
+- Submission is blocked until the legal pages are published and every required campaign field is complete.
+
+Run `npm run db:push` after upgrading. Generate `COMPLIANCE_ENCRYPTION_KEY` as a base64-encoded 32-byte value. During development, keep `TWILIO_COMPLIANCE_MODE=mock`; live Trust Hub submission intentionally remains closed until the production Twilio policy identifiers and authorization path are configured.

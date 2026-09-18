@@ -1,3 +1,4 @@
+import { protectedRoute } from '@/packages/auth/server';
 import { NextResponse } from "next/server";
 import { and, asc, count, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { db } from "@db/index";
@@ -11,7 +12,7 @@ function dayBounds(dateParam: string | null) {
   return { date, start, end };
 }
 
-export async function GET(request: Request) {
+async function handleGET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const { date, start, end } = dayBounds(searchParams.get("date"));
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     const [artist] = await db.select({
       id: artists.id, organizationId: artists.organizationId, displayName: artists.displayName,
       aiMode: artists.aiMode, bookingEnabled: artists.bookingEnabled,
-    }).from(artists).orderBy(asc(artists.displayName)).limit(1);
+    }).from(artists).where(eq(artists.organizationId, searchParams.get('organizationId')!)).orderBy(asc(artists.displayName)).limit(1);
 
     if (!artist) return NextResponse.json({ error: "No artist found. Run npm run db:seed." }, { status: 404 });
 
@@ -86,3 +87,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unable to load dashboard data" }, { status: 500 });
   }
 }
+
+export const GET = protectedRoute(handleGET, false);

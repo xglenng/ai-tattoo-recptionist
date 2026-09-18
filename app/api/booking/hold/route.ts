@@ -1,5 +1,6 @@
+import { protectedRoute } from '@/packages/auth/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq, gte, lt } from 'drizzle-orm';
+import { and, eq, gte, lt, or, isNull } from 'drizzle-orm';
 import { db } from '@db/index';
 import { appointments, artists, clients, services } from '@db/schema';
 import { z } from 'zod';
@@ -15,7 +16,7 @@ const schema = z.object({
   holdMinutes: z.number().int().min(1).max(30).default(10),
 });
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const input = parsed.data;
@@ -31,11 +32,11 @@ export async function POST(request: NextRequest) {
   const conflicts = await db.select({ id: appointments.id }).from(appointments).where(and(
     eq(appointments.organizationId, input.organizationId),
     eq(appointments.artistId, input.artistId),
+    or(eq(appointments.status, 'CONFIRMED'), eq(appointments.status, 'COMPLETED'), and(eq(appointments.status, 'TENTATIVE'), or(isNull(appointments.holdExpiresAt), gte(appointments.holdExpiresAt, now))), and(eq(appointments.status, 'AI_HOLD'), or(isNull(appointments.holdExpiresAt), gte(appointments.holdExpiresAt, now)))),
     lt(appointments.startsAt, endsAt),
     gte(appointments.endsAt, input.startsAt),
   ));
   if (conflicts.length) return NextResponse.json({ error: 'That time is no longer available' }, { status: 409 });
-
   const holdExpiresAt = new Date(now.getTime() + input.holdMinutes * 60_000);
   const [appointment] = await db.insert(appointments).values({
     organizationId: input.organizationId,
@@ -53,3 +54,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ appointment, holdExpiresAt }, { status: 201 });
 }
+
+export const POST = protectedRoute(handlePOST, false);

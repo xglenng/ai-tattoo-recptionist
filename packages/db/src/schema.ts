@@ -20,6 +20,18 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull()
 });
 
+export const authCredentials = pgTable('auth_credentials', {
+  userId: uuid('user_id').primaryKey().references(()=>users.id,{onDelete:'cascade'}),
+  passwordHash: text('password_hash').notNull(), active: boolean('active').notNull().default(true)
+});
+export const authSessions = pgTable('auth_sessions', {
+  tokenHash:text('token_hash').primaryKey(),userId:uuid('user_id').notNull().references(()=>users.id,{onDelete:'cascade'}),
+  expiresAt:timestamp('expires_at',{withTimezone:true}).notNull()
+});
+export const authLoginAttempts=pgTable('auth_login_attempts',{
+  key:text('key').primaryKey(),attempts:integer('attempts').notNull().default(0),resetAt:timestamp('reset_at',{withTimezone:true}).notNull()
+});
+
 export const artists = pgTable("artists", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
@@ -30,6 +42,12 @@ export const artists = pgTable("artists", {
   minimumPriceCents: integer("minimum_price_cents").default(15000).notNull(),
   hourlyRateCents: integer("hourly_rate_cents").default(20000).notNull(),
   aiMode: text("ai_mode").default("ASSISTED").notNull()
+});
+
+export const authOauthStates=pgTable('auth_oauth_states',{
+  tokenHash:text('token_hash').primaryKey(),userId:uuid('user_id').notNull().references(()=>users.id),
+  organizationId:uuid('organization_id').notNull().references(()=>organizations.id),artistId:uuid('artist_id').notNull().references(()=>artists.id),
+  expiresAt:timestamp('expires_at',{withTimezone:true}).notNull()
 });
 
 export const clients = pgTable("clients", {
@@ -138,6 +156,58 @@ export const agentRuns = pgTable("agent_runs", {
   createdAt: timestamp("created_at").defaultNow().notNull()
 });
 
+export const calendarConnections = pgTable("calendar_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  artistId: uuid("artist_id").references(() => artists.id).notNull(),
+  provider: text("provider").notNull().default("google"),
+  calendarId: text("calendar_id"),
+  accessTokenEncrypted: text("access_token_encrypted"),
+  refreshTokenEncrypted: text("refresh_token_encrypted"),
+  expiresAt: timestamp("expires_at"),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const payments = pgTable("payments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  appointmentId: uuid("appointment_id").references(() => appointments.id).notNull(),
+  provider: text("provider").notNull().default("stripe"),
+  providerCheckoutSessionId: text("provider_checkout_session_id"),
+  providerPaymentIntentId: text("provider_payment_intent_id"),
+  amountCents: integer("amount_cents").notNull(),
+  status: text("status").notNull().default("PENDING"),
+  currency: text("currency").notNull().default("usd"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const waiverTemplates = pgTable("waiver_templates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  name: text("name").notNull(),
+  version: integer("version").notNull().default(1),
+  body: text("body").notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull()
+});
+
+export const waiverSubmissions = pgTable("waiver_submissions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  appointmentId: uuid("appointment_id").references(() => appointments.id).notNull(),
+  clientId: uuid("client_id").references(() => clients.id).notNull(),
+  waiverTemplateId: uuid("waiver_template_id").references(() => waiverTemplates.id).notNull(),
+  signedName: text("signed_name").notNull(),
+  signatureData: text("signature_data"),
+  signedAt: timestamp("signed_at").defaultNow().notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  documentHash: text("document_hash").notNull()
+});
+
 export const agentActions = pgTable("agent_actions", {
   id: uuid("id").defaultRandom().primaryKey(),
   agentRunId: uuid("agent_run_id").references(() => agentRuns.id).notNull(),
@@ -145,5 +215,205 @@ export const agentActions = pgTable("agent_actions", {
   arguments: jsonb("arguments").notNull(),
   result: jsonb("result"),
   success: boolean("success").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull()
+});
+
+
+export const twilioAccounts = pgTable("twilio_accounts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  artistId: uuid("artist_id").references(() => artists.id).notNull().unique(),
+  accountSid: text("account_sid").notNull().unique(),
+  authTokenEncrypted: text("auth_token_encrypted").notNull(),
+  status: text("status").notNull().default("ACTIVE"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const twilioMessagingServices = pgTable("twilio_messaging_services", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  artistId: uuid("artist_id").references(() => artists.id).notNull().unique(),
+  twilioAccountId: uuid("twilio_account_id").references(() => twilioAccounts.id).notNull(),
+  serviceSid: text("service_sid").notNull().unique(),
+  status: text("status").notNull().default("ACTIVE"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const phoneNumbers = pgTable("phone_numbers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  artistId: uuid("artist_id").references(() => artists.id).notNull(),
+  phoneNumber: text("phone_number").notNull().unique(),
+  provider: text("provider").notNull().default("twilio"),
+  twilioAccountId: uuid("twilio_account_id").references(() => twilioAccounts.id),
+  twilioPhoneNumberSid: text("twilio_phone_number_sid").unique(),
+  twilioMessagingServiceSid: text("twilio_messaging_service_sid"),
+  complianceStatus: text("compliance_status").default("NOT_REGISTERED").notNull(),
+  lifecycleRole: text("lifecycle_role").default("PRIMARY").notNull(),
+  isPrimary: boolean("is_primary").default(true).notNull(),
+  retireAfter: timestamp("retire_after"),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const phoneNumberPortRequests = pgTable("phone_number_port_requests", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  artistId: uuid("artist_id").references(() => artists.id).notNull(),
+  twilioAccountId: uuid("twilio_account_id").references(() => twilioAccounts.id).notNull(),
+  messagingServiceId: uuid("messaging_service_id").references(() => twilioMessagingServices.id).notNull(),
+  temporaryPhoneNumberId: uuid("temporary_phone_number_id").references(() => phoneNumbers.id),
+  phoneNumber: text("phone_number").notNull(),
+  numberType: text("number_type"),
+  portabilityStatus: text("portability_status").default("NOT_CHECKED").notNull(),
+  pinRequired: boolean("pin_required").default(false).notNull(),
+  carrierAccountNumberEncrypted: text("carrier_account_number_encrypted"),
+  carrierPinEncrypted: text("carrier_pin_encrypted"),
+  carrierCustomerName: text("carrier_customer_name"),
+  carrierAccountPhone: text("carrier_account_phone"),
+  billingStreet: text("billing_street"),
+  billingStreet2: text("billing_street_2"),
+  billingCity: text("billing_city"),
+  billingRegion: text("billing_region"),
+  billingPostalCode: text("billing_postal_code"),
+  billingCountry: text("billing_country").default("US"),
+  authorizedRepresentative: text("authorized_representative"),
+  authorizedRepresentativeEmail: text("authorized_representative_email"),
+  voiceForwardTo: text("voice_forward_to"),
+  providerDocumentSid: text("provider_document_sid"),
+  providerRequestSid: text("provider_request_sid").unique(),
+  providerPhoneNumberSid: text("provider_phone_number_sid"),
+  supportTicketId: text("support_ticket_id"),
+  status: text("status").default("DRAFT").notNull(),
+  rejectionReasonCode: text("rejection_reason_code"),
+  rejectionReason: text("rejection_reason"),
+  targetPortDate: date("target_port_date"),
+  confirmedPortAt: timestamp("confirmed_port_at", { withTimezone: true }),
+  providerPayload: jsonb("provider_payload"),
+  submittedAt: timestamp("submitted_at"),
+  completedAt: timestamp("completed_at"),
+  lastStatusCheckedAt: timestamp("last_status_checked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const automationJobs = pgTable("automation_jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  artistId: uuid("artist_id").references(() => artists.id).notNull(),
+  clientId: uuid("client_id").references(() => clients.id).notNull(),
+  appointmentId: uuid("appointment_id").references(() => appointments.id),
+  type: text("type").notNull(),
+  channel: text("channel").notNull().default("SMS"),
+  runAt: timestamp("run_at").notNull(),
+  status: text("status").notNull().default("PENDING"),
+  payload: jsonb("payload"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const legalDocuments = pgTable("legal_documents", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  type: text("type").notNull(),
+  version: integer("version").notNull().default(1),
+  status: text("status").notNull().default("DRAFT"),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  effectiveDate: date("effective_date").notNull(),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  reviewedAt: timestamp("reviewed_at"),
+  acceptedAt: timestamp("accepted_at"),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const complianceProfiles = pgTable("compliance_profiles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull().unique(),
+  businessName: text("business_name").notNull(),
+  businessAddress: text("business_address").notNull(),
+  contactEmail: text("contact_email").notNull(),
+  websiteUrl: text("website_url").notNull(),
+  smsEnabled: boolean("sms_enabled").default(false).notNull(),
+  legalPagesAcceptedAt: timestamp("legal_pages_accepted_at"),
+  privacyPolicyUrl: text("privacy_policy_url"),
+  termsUrl: text("terms_url"),
+  businessType: text("business_type"),
+  businessRegistrationType: text("business_registration_type").default("EIN"),
+  businessRegistrationNumberEncrypted: text("business_registration_number_encrypted"),
+  businessRegistrationNumberLast4: text("business_registration_number_last4"),
+  contactFirstName: text("contact_first_name"),
+  contactLastName: text("contact_last_name"),
+  contactPhone: text("contact_phone"),
+  representativeBusinessTitle: text("representative_business_title"),
+  representativeJobPosition: text("representative_job_position"),
+  addressLine1: text("address_line_1"),
+  addressLine2: text("address_line_2"),
+  city: text("city"),
+  region: text("region"),
+  postalCode: text("postal_code"),
+  countryCode: text("country_code").default("US"),
+  industry: text("industry"),
+  businessIdentity: text("business_identity").default("direct_customer"),
+  businessRegions: text("business_regions").default("USA_AND_CANADA"),
+  companyType: text("company_type").default("private"),
+  brandType: text("brand_type").default("STANDARD"),
+  campaignUseCase: text("campaign_use_case"),
+  campaignDescription: text("campaign_description"),
+  messageFlow: text("message_flow"),
+  sampleMessages: jsonb("sample_messages"),
+  optInKeywords: jsonb("opt_in_keywords"),
+  helpMessage: text("help_message"),
+  optOutMessage: text("opt_out_message"),
+  hasEmbeddedLinks: boolean("has_embedded_links").default(false).notNull(),
+  hasEmbeddedPhoneNumbers: boolean("has_embedded_phone_numbers").default(false).notNull(),
+  subscriberOptIn: boolean("subscriber_opt_in").default(true).notNull(),
+  submittedAt: timestamp("submitted_at"),
+  lastStatusCheckedAt: timestamp("last_status_checked_at"),
+  twilioCustomerProfileSid: text("twilio_customer_profile_sid"),
+  twilioTrustProductSid: text("twilio_trust_product_sid"),
+  twilioBrandSid: text("twilio_brand_sid"),
+  twilioCampaignSid: text("twilio_campaign_sid"),
+  twilioArtifacts: jsonb("twilio_artifacts"),
+  providerErrors: jsonb("provider_errors"),
+  customerProfileStatus: text("customer_profile_status"),
+  trustProductStatus: text("trust_product_status"),
+  brandStatus: text("brand_status"),
+  activatedAt: timestamp("activated_at"),
+  status: text("status").default("NOT_STARTED").notNull(),
+  statusMessage: text("status_message"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const a2pCampaigns = pgTable("a2p_campaigns", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  artistId: uuid("artist_id").references(() => artists.id).notNull(),
+  messagingServiceId: uuid("messaging_service_id").references(() => twilioMessagingServices.id).notNull().unique(),
+  twilioAccountId: uuid("twilio_account_id").references(() => twilioAccounts.id).notNull(),
+  providerCampaignSid: text("provider_campaign_sid").unique(),
+  status: text("status").default("NOT_STARTED").notNull(),
+  errors: jsonb("errors"),
+  submittedAt: timestamp("submitted_at"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+export const complianceEvents = pgTable("compliance_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").references(() => organizations.id).notNull(),
+  phase: text("phase").notNull(),
+  action: text("action").notNull(),
+  status: text("status").notNull(),
+  providerSid: text("provider_sid"),
+  details: jsonb("details"),
   createdAt: timestamp("created_at").defaultNow().notNull()
 });

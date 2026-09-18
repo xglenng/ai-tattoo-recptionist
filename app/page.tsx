@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSession } from "@/components/session-gate";
 import "./dashboard.css";
 
 type Appointment = { id: string; startsAt: string; endsAt: string; client: string; service: string; status: string; priceCents: number | null; depositCents: number | null; depositStatus: string; };
@@ -15,6 +16,7 @@ function formatDate(value: string) { return new Date(value).toLocaleDateString("
 
 
 export default function Home() {
+  const user = useSession();
   const [view, setView] = useState<"Overview" | "Calendar" | "Inbox" | "Clients">("Overview");
   const [aiEnabled, setAiEnabled] = useState(true);
   const [selectedDay, setSelectedDay] = useState(2);
@@ -57,7 +59,7 @@ export default function Home() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <button className="nav-item"><span className="nav-icon">⚙</span>Settings</button>
+          {user?.role === 'OWNER' && <a href="/settings" className="nav-item" style={{ textDecoration: 'none' }}><span className="nav-icon">⚙</span>Settings</a>}
           <div className="ai-status"><span className={aiEnabled ? "status-dot" : "status-dot off"}></span><div><strong>AI receptionist</strong><span>{aiEnabled ? "Active · Assisted mode" : "Paused"}</span></div><button onClick={() => setAiEnabled(!aiEnabled)}>{aiEnabled ? "ON" : "OFF"}</button></div>
         </div>
       </aside>
